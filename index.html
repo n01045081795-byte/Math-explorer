@@ -179,6 +179,10 @@
             modeNameElement.textContent = '선택 필요';
             feedbackMessage.textContent = '';
         }
+        
+        // 전역 함수로 노출 (HTML onclick에서 직접 호출 가능하도록)
+        window.showMenu = showMenu;
+
 
         // --- 게임 시작 (모드 선택 후) ---
         function startGame(modeKey) {
@@ -267,11 +271,6 @@
         function generateKeypad() {
             keypadFooter.innerHTML = '';
             
-            // 7, 8, 9
-            // 4, 5, 6
-            // 1, 2, 3
-            // [C], 0, [OK]
-
             const keys = [7, 8, 9, 4, 5, 6, 1, 2, 3, 'C', 0, 'OK'];
 
             keys.forEach(key => {
@@ -343,6 +342,12 @@
                 generateProblem();
             }, 1000); 
         }
+        
+        // 전역 함수로 노출
+        window.checkAnswer = checkAnswer;
+        window.clearInput = clearInput;
+        window.appendInput = appendInput;
+
 
         // --- 기타 메시지 출력 ---
         function showMessage(text, colorClass) {
