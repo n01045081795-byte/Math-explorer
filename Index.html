@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수학 우주 탐험대 - 최종 안정화</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Inter font and mobile optimization */
+        body { font-family: 'Inter', sans-serif; background-color: #1f2937; color: white; }
+        
+        /* Main screen layout (no scroll) */
+        .game-screen {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+        }
+
+        /* Large button styles */
+        .mode-button, .answer-button {
+            transition: transform 0.1s;
+            box-shadow: 0 4px 0 0 #0f6c44; 
+            min-height: 60px; 
+        }
+        .mode-button:active, .answer-button:active {
+            transform: translateY(4px);
+            box-shadow: none; 
+        }
+
+        /* Menu button theme */
+        .mode-button {
+            background-color: #3b82f6; /* Blue for Menu */
+            box-shadow: 0 4px 0 0 #1e40af;
+        }
+        .mode-button:hover {
+            background-color: #2563eb;
+        }
+
+        /* Spaceship animation */
+        .spaceship {
+            animation: bounce 2s infinite ease-in-out;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900">
+
+    <div id="app" class="game-screen w-full max-w-lg mx-auto">
+
+        <!-- 1. Top Score and Mode Display -->
+        <header class="w-full text-center space-y-2 flex-shrink-0">
+            <h1 class="text-3xl font-extrabold text-yellow-400">🚀 수학 우주 탐험대 🪐</h1>
+            <div class="flex justify-around bg-gray-800 p-3 rounded-xl shadow-lg">
+                <span class="text-xl font-bold text-green-400">정답 수: <span id="score">0</span></span>
+                <span class="text-xl font-bold text-blue-400">모드: <span id="currentModeName">선택 필요</span></span>
+                <button onclick="showMenu()" class="text-sm font-semibold bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded">메뉴</button>
+            </div>
+        </header>
+
+        <!-- 2. Main Content Area (Problem or Menu) -->
+        <main class="flex flex-col items-center justify-center space-y-8 flex-grow w-full text-center">
+            
+            <div id="gameArea" class="w-full h-full flex flex-col items-center justify-center space-y-8" style="display:none;">
+                <div class="spaceship text-6xl">🧑‍🚀</div>
+                
+                <div id="problemDisplay" class="text-6xl font-black bg-blue-900 p-6 rounded-3xl shadow-2xl border-4 border-blue-500">
+                    <!-- Problem loading area -->
+                </div>
+
+                <div id="feedbackMessage" class="text-3xl font-extrabold h-10"></div>
+            </div>
+
+            <!-- Menu Screen -->
+            <div id="menuArea" class="w-full p-4 bg-gray-800 rounded-xl shadow-2xl space-y-4">
+                <h2 class="text-2xl font-bold text-yellow-300">⭐ 탐험 모드 선택 ⭐</h2>
+                <div id="modeButtons" class="grid grid-cols-2 gap-3">
+                    <!-- Buttons are loaded by JS -->
+                </div>
+            </div>
+        </main>
+
+        <!-- 3. Bottom Answer Buttons -->
+        <footer id="answerFooter" class="w-full grid grid-cols-3 gap-3 flex-shrink-0" style="display:none;">
+            <!-- Answer buttons are displayed only during the game -->
+        </footer>
+
+    </div>
+
+    <script type="module">
+        // --- Game State Management ---
+        let score = 0;
+        let correctAnswer = 0;
+        let currentMode = null;
+        let gameActive = false; 
+
+        // --- Mode Definitions ---
+        const MODES = {
+            'count': { name: '숫자 세기 (5이하)', min: 1, max: 5, op: 'count' },
+            'count_hard': { name: '숫자 세기 (10이하)', min: 1, max: 10, op: 'count' },
+            // One-digit: No carry/borrow restrictions, but result must be >= 0
+            'add_one': { name: '덧셈 (한 자리)', min: 1, max: 9, op: '+' },
+            'sub_one': { name: '뺄셈 (한 자리, 음수X)', min: 1, max: 9, op: '-' },
+            // Two-digits: No carry/borrow restrictions
+            'add_two_no_carry': { name: '덧셈 (두 자리, 올림X)', min: 10, max: 88, op: '+' }, 
+            'sub_two_no_borrow': { name: '뺄셈 (두 자리, 내림X)', min: 10, max: 99, op: '-' }, 
+        };
+
+        // --- DOM Elements ---
+        const scoreElement = document.getElementById('score');
+        const modeNameElement = document.getElementById('currentModeName');
+        const problemDisplay = document.getElementById('problemDisplay');
+        const feedbackMessage = document.getElementById('feedbackMessage');
+        const buttonContainer = document.getElementById('modeButtons');
+        const answerFooter = document.getElementById('answerFooter');
+        const gameArea = document.getElementById('gameArea');
+        const menuArea = document.getElementById('menuArea');
+
+        // --- Feedback ---
+        function playFeedback(isCorrect) {
+            const message = isCorrect ? '정답! ✨' : '오답! ❌';
+            const color = isCorrect ? 'text-green-400' : 'text-red-500';
+
+            feedbackMessage.textContent = message;
+            feedbackMessage.className = `text-3xl font-extrabold h-10 ${color}`;
+
+            setTimeout(() => {
+                feedbackMessage.textContent = '';
+                feedbackMessage.className = `text-3xl font-extrabold h-10`;
+            }, 1000);
+        }
+        
+        // --- Show Menu ---
+        function showMenu() {
+            gameActive = false;
+            gameArea.style.display = 'none';
+            answerFooter.style.display = 'none';
+            menuArea.style.display = 'block';
+
+            buttonContainer.innerHTML = '';
+            
+            Object.keys(MODES).forEach(key => {
+                const mode = MODES[key];
+                const button = document.createElement('button');
+                button.textContent = mode.name;
+                button.className = 'mode-button p-3 text-lg font-bold text-white rounded-xl';
+                button.onclick = () => startGame(key);
+                buttonContainer.appendChild(button);
+            });
+
+            score = 0;
+            scoreElement.textContent = score;
+            modeNameElement.textContent = '선택 필요';
+            feedbackMessage.textContent = '';
+        }
+
+        // --- Start Game ---
+        function startGame(modeKey) {
+            currentMode = MODES[modeKey];
+            modeNameElement.textContent = currentMode.name;
+
+            gameActive = true;
+            menuArea.style.display = 'none';
+            gameArea.style.display = 'flex';
+            answerFooter.style.display = 'grid';
+
+            generateProblem();
+            showMessage(`탐험 시작! ${currentMode.name} 모드입니다!`, 'text-blue-400');
+        }
+
+
+        // --- Problem Generation Logic ---
+        function generateProblem() {
+            if (!currentMode) return;
+
+            let num1, num2;
+            const operator = currentMode.op;
+            let visualProblem = '';
+
+            if (operator === 'count') {
+                // Counting Mode
+                const min = currentMode.min;
+                const max = currentMode.max;
+                num1 = Math.floor(Math.random() * (max - min + 1)) + min; 
+                correctAnswer = num1;
+                
+                const items = ['⭐', '🪐', '☄️', '🌑', '👽'];
+                const item = items[Math.floor(Math.random() * items.length)];
+                for (let i = 0; i < num1; i++) {
+                    visualProblem += item + (i % 5 === 4 ? '<br>' : ''); 
+                }
+                problemDisplay.innerHTML = `<span class="text-4xl block mb-4">${item}을 세어보세요!</span><span class="text-6xl">${visualProblem}</span>`;
+            
+            } else {
+                // Addition/Subtraction Logic
+                
+                if (operator === '+') {
+                    // Addition Logic
+                    if (currentMode.name.includes("한 자리")) {
+                        // One-digit Addition (Max result 18)
+                        num1 = Math.floor(Math.random() * 9) + 1;
+                        num2 = Math.floor(Math.random() * 9) + 1;
+                    } else {
+                        // Two-digit Addition (NO CARRYING)
+                        let tens1, units1, tens2, units2;
+                        
+                        // Units: Sum <= 9
+                        units1 = Math.floor(Math.random() * 9) + 1; 
+                        units2 = Math.floor(Math.random() * (10 - units1)); 
+                        
+                        // Tens: Sum <= 9 (Max result 99)
+                        tens1 = Math.floor(Math.random() * 8) + 1; 
+                        tens2 = Math.floor(Math.random() * (9 - tens1));
+                        if (tens2 === 0) tens2 = 1; // Prevent tens digit being 0
+                        
+                        num1 = tens1 * 10 + units1;
+                        num2 = tens2 * 10 + units2;
+                    }
+                    correctAnswer = num1 + num2;
+                    
+                } else if (operator === '-') {
+                    // Subtraction Logic (Result >= 0 guaranteed)
+                    
+                    if (currentMode.name.includes("한 자리")) {
+                        // One-digit Subtraction (Result >= 0)
+                        num1 = Math.floor(Math.random() * 9) + 1;
+                        num2 = Math.floor(Math.random() * (num1 + 1)); // 0 <= num2 <= num1
+                        
+                    } else {
+                        // Two-digit Subtraction (NO BORROWING)
+                        let tens1, units1, tens2, units2;
+                        
+                        // Tens: tens1 > tens2
+                        tens1 = Math.floor(Math.random() * 8) + 2; // 2~9
+                        tens2 = Math.floor(Math.random() * (tens1 - 1)) + 1; // 1~tens1-1
+                        
+                        // Units: units1 >= units2
+                        units1 = Math.floor(Math.random() * 9) + 1; // 1~9
+                        units2 = Math.floor(Math.random() * (units1 + 1)); // 0~units1
+                        
+                        num1 = tens1 * 10 + units1;
+                        num2 = tens2 * 10 + units2;
+                    }
+                    correctAnswer = num1 - num2;
+                }
+                
+                problemDisplay.innerHTML = `<span class="text-yellow-300">${num1}</span> <span class="text-white">${operator}</span> <span class="text-yellow-300">${num2}</span> <span class="text-white">= ?</span>`;
+            }
+            
+            generateAnswerButtons();
+        }
+
+        // --- Generate Answer Buttons ---
+        function generateAnswerButtons() {
+            answerFooter.innerHTML = '';
+            
+            const answers = new Set();
+            answers.add(correctAnswer);
+
+            while (answers.size < 6) {
+                let wrongAnswer;
+                const rangeMax = Math.max(correctAnswer + 5, 20); 
+
+                do {
+                    wrongAnswer = Math.floor(Math.random() * rangeMax);
+                } while (answers.has(wrongAnswer) || wrongAnswer < 0);
+                
+                answers.add(wrongAnswer);
+            }
+
+            const shuffledAnswers = Array.from(answers).sort(() => Math.random() - 0.5);
+
+            shuffledAnswers.forEach(answer => {
+                const button = document.createElement('button');
+                button.textContent = answer;
+                button.className = 'answer-button p-4 text-3xl font-bold bg-green-500 hover:bg-green-600 text-white rounded-xl shadow-xl';
+                button.onclick = () => checkAnswer(answer);
+                answerFooter.appendChild(button);
+            });
+        }
+
+        // --- Check Answer ---
+        function checkAnswer(selectedAnswer) {
+            if (!gameActive) return; 
+
+            answerFooter.querySelectorAll('button').forEach(btn => btn.disabled = true);
+
+            if (selectedAnswer === correctAnswer) {
+                playFeedback(true);
+                score++;
+                scoreElement.textContent = score;
+            } else {
+                playFeedback(false);
+            }
+            
+            setTimeout(() => {
+                answerFooter.querySelectorAll('button').forEach(btn => btn.disabled = false);
+                generateProblem();
+            }, 1000); 
+        }
+
+        // --- Show Message ---
+        function showMessage(text, colorClass) {
+            feedbackMessage.textContent = text;
+            feedbackMessage.className = `text-3xl font-extrabold h-10 ${colorClass}`;
+        }
+
+        // --- Initialize Game ---
+        function initializeGame() {
+            const app = document.getElementById('app');
+            app.style.height = `${window.innerHeight}px`;
+            window.onresize = () => app.style.height = `${window.innerHeight}px`;
+
+            showMenu();
+        }
+
+        window.onload = initializeGame;
+
+    </script>
+</body>
+</html>
+
