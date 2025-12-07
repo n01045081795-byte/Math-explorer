@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>수학 우주 탐험대 - 주관식 입력</title>
+    <title>수학 우주 탐험대 - 개인화</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -96,9 +96,19 @@
 
             <!-- 메뉴 화면 -->
             <div id="menuArea" class="w-full p-4 bg-gray-800 rounded-xl shadow-2xl space-y-4">
-                <h2 class="text-2xl font-bold text-yellow-300">⭐ 탐험 모드 선택 ⭐</h2>
-                <div id="modeButtons" class="grid grid-cols-2 gap-3">
-                    <!-- Buttons are loaded by JS -->
+                <h2 class="text-2xl font-bold text-yellow-300" id="welcomeMessage">⭐ 수학 우주 탐험대 ⭐</h2>
+                <div id="nameInputArea" class="space-y-3">
+                    <p class="text-lg">👋 탐험가님의 이름을 입력해 주세요:</p>
+                    <input type="text" id="userNameInput" placeholder="예: 연서" class="w-full p-3 rounded-lg text-black text-center text-xl" maxlength="5">
+                    <button id="startButton" onclick="startNameEntry()" class="mode-button w-full p-3 text-2xl font-bold">이름 확정 및 시작</button>
+                </div>
+                
+                <!-- 모드 선택은 이름 입력 후 나타남 -->
+                <div id="modeSelectionArea" style="display:none;">
+                    <h3 class="text-xl font-bold text-yellow-300 mb-3">🚀 모드 선택</h3>
+                    <div id="modeButtons" class="grid grid-cols-2 gap-3">
+                        <!-- Buttons are loaded by JS -->
+                    </div>
                 </div>
             </div>
         </main>
@@ -116,7 +126,8 @@
         let correctAnswer = 0;
         let currentMode = null;
         let gameActive = false; 
-        let currentInput = ""; // 현재 사용자가 입력한 숫자
+        let currentInput = ""; 
+        let userName = "탐험가"; // 기본 이름
 
         // --- Mode Definitions ---
         const MODES = {
@@ -138,10 +149,22 @@
         const gameArea = document.getElementById('gameArea');
         const menuArea = document.getElementById('menuArea');
         const answerInputDisplay = document.getElementById('answerInputDisplay');
+        const userNameInput = document.getElementById('userNameInput');
+        const nameInputArea = document.getElementById('nameInputArea');
+        const modeSelectionArea = document.getElementById('modeSelectionArea');
+        const welcomeMessage = document.getElementById('welcomeMessage');
 
-        // --- 피드백 및 사운드 효과 ---
+        // --- 피드백 및 응원 메시지 ---
         function playFeedback(isCorrect) {
-            const message = isCorrect ? '정답! ✨' : '오답! ❌';
+            let message;
+            if (isCorrect) {
+                const congrats = ["정답!", "아주 잘했어!", "최고야!", "멋져!"];
+                message = `${userName}야, ${congrats[Math.floor(Math.random() * congrats.length)]} ✨`;
+            } else {
+                const encourage = ["다시 한번!", "조금 아쉬워!", "한번 더 생각해보자!"];
+                message = `${userName}야, ${encourage[Math.floor(Math.random() * encourage.length)]} ❌`;
+            }
+            
             const color = isCorrect ? 'text-green-400' : 'text-red-500';
 
             feedbackMessage.textContent = message;
@@ -153,15 +176,42 @@
             }, 1000);
         }
         
-        // --- 모드 선택 메뉴 표시 ---
-        function showMenu() {
-            currentInput = "";
-            answerInputDisplay.textContent = "";
+        // --- 이름 입력 처리 및 메뉴 표시 ---
+        function startNameEntry() {
+            const input = userNameInput.value.trim();
+            if (input.length > 0) {
+                userName = input;
+                showModeSelection();
+            } else {
+                alert("이름을 입력해 주세요!");
+            }
+        }
+        window.startNameEntry = startNameEntry; // 전역 노출
 
+        function showMenu() {
             gameActive = false;
             gameArea.style.display = 'none';
             keypadFooter.style.display = 'none';
             menuArea.style.display = 'block';
+
+            // 초기 시작 시 이름 입력 화면부터 보여주기
+            nameInputArea.style.display = 'block';
+            modeSelectionArea.style.display = 'none';
+            welcomeMessage.textContent = "⭐ 수학 우주 탐험대 ⭐";
+
+            score = 0;
+            scoreElement.textContent = score;
+            modeNameElement.textContent = '선택 필요';
+            feedbackMessage.textContent = '';
+        }
+        window.showMenu = showMenu;
+
+
+        // --- 모드 선택 화면 표시 ---
+        function showModeSelection() {
+            nameInputArea.style.display = 'none';
+            modeSelectionArea.style.display = 'block';
+            welcomeMessage.textContent = `🚀 ${userName} 탐험가님, 환영합니다!`;
 
             buttonContainer.innerHTML = '';
             
@@ -173,15 +223,7 @@
                 button.onclick = () => startGame(key);
                 buttonContainer.appendChild(button);
             });
-
-            score = 0;
-            scoreElement.textContent = score;
-            modeNameElement.textContent = '선택 필요';
-            feedbackMessage.textContent = '';
         }
-        
-        // 전역 함수로 노출 (HTML onclick에서 직접 호출 가능하도록)
-        window.showMenu = showMenu;
 
 
         // --- 게임 시작 (모드 선택 후) ---
@@ -196,7 +238,7 @@
 
             generateKeypad();
             generateProblem();
-            showMessage(`탐험 시작! ${currentMode.name} 모드입니다!`, 'text-blue-400');
+            showMessage(`${userName}야, 탐험을 시작하자!`, 'text-blue-400');
         }
 
 
@@ -299,7 +341,6 @@
         function appendInput(digit) {
             if (!gameActive) return;
 
-            // 정답의 최대 자릿수 (현재 최대 3자리: 99+99=198)
             const maxDigits = (correctAnswer >= 100) ? 3 : 2; 
 
             if (currentInput.length < maxDigits) {
@@ -307,6 +348,8 @@
                 answerInputDisplay.textContent = currentInput;
             }
         }
+        window.appendInput = appendInput;
+
 
         // --- 입력 지우기 ---
         function clearInput() {
@@ -314,15 +357,16 @@
             currentInput = currentInput.slice(0, -1);
             answerInputDisplay.textContent = currentInput;
         }
+        window.clearInput = clearInput;
+
 
         // --- 답변 확인 (주관식) ---
         function checkAnswer() {
             if (!gameActive || currentInput === "") {
-                showMessage("숫자를 입력해 주세요!", "text-red-500");
+                showMessage(`${userName}야, 숫자를 입력해 줘야 해!`, "text-red-500");
                 return;
             }
 
-            // 모든 키패드 버튼 비활성화
             keypadFooter.querySelectorAll('button').forEach(btn => btn.disabled = true);
 
             const userGuess = parseInt(currentInput);
@@ -331,22 +375,26 @@
                 playFeedback(true);
                 score++;
                 scoreElement.textContent = score;
+
+                // 정답: 다음 문제로 이동
+                setTimeout(() => {
+                    keypadFooter.querySelectorAll('button').forEach(btn => btn.disabled = false);
+                    generateProblem();
+                }, 1000);
+
             } else {
                 playFeedback(false);
+                
+                // 오답: 입력 초기화 및 재시도 기회 제공 (문제는 유지)
+                setTimeout(() => {
+                    keypadFooter.querySelectorAll('button').forEach(btn => btn.disabled = false);
+                    currentInput = "";
+                    answerInputDisplay.textContent = "";
+                    showMessage(`${userName}야, 다시 입력해 보자!`, "text-yellow-400"); // 힌트 메시지
+                }, 1000);
             }
-            
-            // 다음 문제 로드
-            setTimeout(() => {
-                // 키패드 버튼 다시 활성화
-                keypadFooter.querySelectorAll('button').forEach(btn => btn.disabled = false);
-                generateProblem();
-            }, 1000); 
         }
-        
-        // 전역 함수로 노출
         window.checkAnswer = checkAnswer;
-        window.clearInput = clearInput;
-        window.appendInput = appendInput;
 
 
         // --- 기타 메시지 출력 ---
